@@ -3,18 +3,8 @@ Workshop
 
 Cezar Sá - tsuru
 
-* Agenda
-.html images/style.html
-
-- Setup
-- Concepts
-- Kubernetes API basics
-- Client-go
-- Custom Resource Definitions (CRDs)
-- Controllers
-- Operators
-
 * Requirements
+.html images/style.html
 
 This presentation and the code we are going to use is available at:
 
@@ -104,7 +94,6 @@ Usually YAML files are used to represent a Kubernetes object, example:
     annotations:
 
   spec:
-    affinity:
     containers:
       - name: mypod1
         image: busybox
@@ -404,6 +393,7 @@ However, can make debugging harder as it's not always obvious how the diff and p
 - Liveness/Readiness probes
 - Restart policy
 - Sidecar pattern
+- Affinity
 
 * Resource requests and limits
 
@@ -513,6 +503,90 @@ There are many examples where this would be useful, like processing logs, or set
   $ kubectl apply -f labs/service-sidecar.yaml
   $ minikube service list
 
+
+* Let's talk about nodes
+
+* Nodes
+
+Nodes are also registered as kubernetes objects.
+The kubelet process on each node is responsible for updating the node status and checking its resource usage.
+
+* Hands on: Nodes
+
+  $ kubectl get nodes
+  $ kubectl describe nodes
+
+Nodes as any other object can have metadata as labels and annotations, and some are added automatically.
+
+: Talk about describe
+
+* Taints and Tolerations
+
+Nodes can have `taints`, taints are a way for telling the scheduler that this node should not be used by a pod unless the pod `tollerates` the specified taint.
+
+Using this mechanism we can for example make master nodes unschedulable.
+
+It's also useful for debugging a node, no pods will use it except pods made to tollerate it while debugging.
+
+* Taints and Tolerations
+
+In nodes:
+
+  taints:
+    - effect: NoSchedule
+      key: mytaint
+      value: myvalue
+
+In pods:
+
+  tolerations:
+    - key: mytaint
+      operator: Exists
+
+Effects can be:
+
+- NoSchedule
+- PreferNoSchedule
+- NoExecute (force eviction)
+
+* Hands on: Taints/Tolerations
+
+  $ kubectl taint node minikube mytaint=myvalue:NoSchedule
+  $ kubectl apply -f ./labs/pod-toleration.yaml 
+  $ ... error ...
+  $ ... modify the pod to add a toleration ...
+  $ kubectl apply -f ./labs/pod-toleration.yaml
+
+* Affinity and anti-affinity
+
+Affinities are ways to interact with the scheduler and and change how it's going to work.
+
+With affinities it's possible to say that a pod should only be scheduled on nodes with some specific label.
+On the other hand, it's also possible to say that a pod should *not* be scheduled on a node containting a certain kind of pod.
+
+* Node Affinity
+
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+        - matchExpressions:              # OR
+          - key: beta.kubernetes.io/arch # AND
+            operator: In
+            values:
+            - amd64
+
+- requiredDuringSchedulingIgnoredDuringExecution
+- preferredDuringSchedulingIgnoredDuringExecution
+
+Also:
+- podAffinity
+- podAntiAffinity
+
+* Hands on: Node Affinity
+
+Let's modify a pod to add a node affinity to it
+
 * Service topics
 
 * Service topics
@@ -612,59 +686,6 @@ Rolling update allow us to configure how deployments are updated ensuring it nev
   $ kubectl apply -f ./labs/deployment-rolling.yaml
   $ kubectl rollout status deployment/rolling-deployment
 
-* Let's talk about nodes
-
-* Nodes
-
-Nodes are also registered as kubernetes objects.
-The kubelet process on each node is responsible for updating the node status and checking its resource usage.
-
-* Hands on: Nodes
-
-  $ kubectl get nodes
-  $ kubectl describe nodes
-
-Nodes as any other object can have metadata as labels and annotations, and some are added automatically.
-
-: Talk about describe
-
-* Taints and Tolerations
-
-Nodes can have `taints`, taints are a way for telling the scheduler that this node should not be used by a pod unless the pod `tollerates` the specified taint.
-
-Using this mechanism we can for example make master nodes unschedulable.
-
-It's also useful for debugging a node, no pods will use it except pods made to tollerate it while debugging.
-
-* Taints and Tolerations
-
-In nodes:
-
-  taints:
-    - effect: NoSchedule
-      key: mytaint
-      value: myvalue
-
-In pods:
-
-  tolerations:
-    - key: mytaint
-      operator: Exists
-
-Effects can be:
-
-- NoSchedule
-- PreferNoSchedule
-- NoExecute (force eviction)
-
-* Hands on: Taints/Tolerations
-
-  $ kubectl taint node minikube mytaint=myvalue:NoSchedule
-  $ kubectl apply -f ./labs/pod-toleration.yaml 
-  $ ... error ...
-  $ ... modify the pod to add a toleration ...
-  $ kubectl apply -f ./labs/pod-toleration.yaml 
-
 * DaemonSets
 
 * DaemonSets
@@ -687,3 +708,27 @@ Object specification similar to Deployments
   $ kubectl apply -f ./labs/daemonset.yaml
   $ kubectl get daemonset
   $ kubectl get pods
+
+* Volumes
+
+Volumes allow exposing external volumes to containers.
+
+External volumes can be:
+
+- Directories on the node;
+- Network drives like NFS, or Ceph Block Device;
+- Cloud based block devices like EBS.
+
+* Volumes
+
+  volumes:
+  - name: shared-data
+    nfs:
+      path: /exported/path
+      server: 10.0.0.1
+  ...
+  containers:
+  - name: cont1
+    volumeMounts:
+      name: shared-data
+      mountPath: /mnt/dir
