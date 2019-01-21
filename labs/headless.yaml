@@ -1,0 +1,37 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: headless-pod1
+  labels:
+    app: headless-app
+spec:
+  containers:
+  - name: cont1
+    image: nginx
+    ports:
+    - containerPort: 80
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: headless-pod2
+  labels:
+    app: headless-app
+spec:
+  containers:
+  - name: cont1
+    image: nginx
+    ports:
+    - containerPort: 80
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: headless-svc
+spec:
+  type: ClusterIP
+  clusterIP: None
+  ports:
+    - port: 80
+  selector:
+    app: headless-app

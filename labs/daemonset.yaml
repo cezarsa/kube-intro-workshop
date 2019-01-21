@@ -1,0 +1,27 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: logging
+  labels:
+    app: logging
+spec:
+  selector:
+    matchLabels:
+      name: logging
+  template:
+    metadata:
+      labels:
+        name: logging
+    spec:
+      containers:
+      - name: logging
+        image: busybox
+        command: ["/bin/sh"]
+        args: ["-c", "while true; do echo oi >/var/log/oi; sleep 5; done"]
+        volumeMounts:
+        - name: varlog
+          mountPath: /var/log
+      volumes:
+      - name: varlog
+        hostPath:
+          path: /var/log

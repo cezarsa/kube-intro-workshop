@@ -1,0 +1,689 @@
+Kubernetes Intro
+Workshop
+
+Cezar Sá - tsuru
+
+* Agenda
+.html images/style.html
+
+- Setup
+- Concepts
+- Kubernetes API basics
+- Client-go
+- Custom Resource Definitions (CRDs)
+- Controllers
+- Operators
+
+* Requirements
+
+This presentation and the code we are going to use is available at:
+
+[[https://github.com/cezarsa/kube-intro-workshop]]
+[[https://go-talks.appspot.com/github.com/cezarsa/kube-intro-workshop/workshop.slide]]
+
+We'll need:
+
+- Minikube - For running a local kubernetes cluster
+- Kubectl - For interacting with the kubernetes cluster
+
+* Setup
+
+- Installing Minikube
+  
+[[https://github.com/kubernetes/minikube#installation]]
+
+- Installing Kubectl
+
+[[https://kubernetes.io/docs/tasks/tools/install-kubectl/]]
+
+* What is Kubernetes
+
+When people hear about kubernetes one of the first definitions that come to
+mind is: 
+
+"Kubernetes is a container orchestrator."
+
+It knows:
+
+- *How* to start containers
+- *When* to start containers
+- *Where* to start containers
+
+: One of the official definitions is "Kubernetes is an open-source system for
+: automating deployment, scaling, and management of containerized applications."
+: It does a lot of things not directly related to containers but containers are
+: the core functionality.
+
+: Another more broad definition is that Kubernetes is a platform for
+: distributed applications.
+
+: Ask if the audience is familiar with the concept of plain docker containers
+: and basic explanation if needed.
+
+* What is Kubernetes
+
+There is more.
+
+A better way to think of kubernetes is as a state machine.
+
+It keeps trying to change the real world (nodes, containers, networks) to make
+it match a set of definitions.
+
+It *never* stops trying as external factors can change the real world state at
+any time.
+
+* Concepts
+
+Kubernetes provides an API for CRUDing objects.
+
+Basic objects:
+
+- Pods
+- Namespaces
+- Services
+- Endpoints
+- Volumes
+- Nodes
+
+The *control* *plane* is responsible for storing these objects and doing something with them.
+
+* Concepts
+
+`kubectl` is a CLI that can talk to the Kubernetes API in a user friendly way.
+
+* Concepts (YAML)
+
+Usually YAML files are used to represent a Kubernetes object, example:
+
+  apiVersion: v1
+  kind: Pod
+
+  metadata:
+    name: mypod
+    labels:
+    annotations:
+
+  spec:
+    affinity:
+    containers:
+      - name: mypod1
+        image: busybox
+
+  status:
+
+These 4 blocks are common for all Kubernetes objects.
+
+* Control Plane: Master and Nodes
+
+Resources created on the API describe the *desired* state.
+
+The Control Plane is responsible for making the *desired* state a reality.
+
+.image images/kubernetes-control-plane.png _ 700
+.caption By [[https://docs.google.com/presentation/d/1Gp-2blk5WExI_QR59EUZdwfO2BWLJqa626mK2ej-huo/edit#slide=id.g1e639c415b_0_56][Lucas Käldström]]
+
+* Control Plane:
+
+Every node (including masters) must run 2 processes:
+- kubelet
+- kube-proxy
+
+Every master node also runs:
+- kube-apiserver
+- kube-controller-manager
+- kube-scheduler
+- kube-dns
+
+: A YAML file with a resource description always describe a desired state,
+: this desired state may never come true depending on the available resources for the
+: cluster.
+
+* Pods
+
+* Pods
+
+Similar to docker containers, except one pod can contain more than one container.
+
+Containers in the same pod:
+- Are scheduled on the same machine;
+- Share the Network namespace (same IP);
+- Share volumes assigned to the Pod.
+
+.code labs/pod.yaml
+
+: PID namespace can also optionally be shared as of 1.10.
+
+* Hands on: kubectl
+
+- Bootstrap minikube and check cluster
+
+  $ minikube start
+  $ kubectl cluster-info
+
+- Manipulating resources with kubectl
+
+  $ kubectl create -f ./labs/pod.yaml
+  $ kubectl get pod
+
+  # What more can we do with pods?
+  $ kubectl explain pod.spec
+
+* Pods - what happened?
+  -
+                    +------+
+                    | etcd | 
+                    +---^--+
+                        |
+                    +------------------------------------+
+                    |   |2                               |
+                    |  +------------+3     +-----------+ |
+    +---------+ 1   |  |            +------>           | |
+    |         +--------> api-server |     4| scheduler | |
+    | kubectl |     |  |            <------+           | |
+    |         |     |  +------^-----+      +-----------+ |
+    +---------+     |   |5    |                          |
+                    +------------------------------------+
+                        |     |
+                    +------------------------------------+
+                    |   |     |6                         |
+                    |  +v--------+                       |
+                    |  |         |                       |
+                    |  | kubelet |                       |
+                    |  |         |                       |
+                    |  +---------+                       |
+                    +------------------------------------+
+
+* Pods - what happened?
+  1 - kubectl    -> api-server: 
+    I want to create a Pod.
+
+  2 - api-server -> etcd: 
+    Hey etcd, please store this new pod.
+
+  3 - api-server -> scheduler: 
+    Hi scheduler, you asked to be notified on new pods, here is a new one.
+
+  4 - scheduler  -> api-server: 
+    Thanks, I can see this pod has no Node yet, I've chosen one and updated this Pod.
+
+  5 - api-server -> kubelet: 
+    Hey kubelet, you asked to be notified when a pod is updated, here is this one.
+
+  6 - kubelet    -> api-server: 
+    Oh thanks, I can see this pod was supposed to be running on my node.
+    I've just started it and updated the Pod status.
+
+* Pods
+
+- Pods will die, on their own they do not provide resilience;
+
+- A pod scheduled to a node will always run on the same node. There's no such thing as a _rescheduled_ pod;
+
+- A higher level abstraction is needed to provide resilience;
+
+- Only a very limited set of attributes can be modified on exiting pods.
+
+* Namespaces
+
+Namespaces can be thought as a way to divide the cluster in multiple sub-clusters.
+
+They are intended to be used when working with multiple team or projects.
+
+By default every cluster is born with 2 important namespaces:
+
+- default
+- kube-system
+
+* Hands on: Where is this control-plane?
+
+  $ kubectl get namespaces
+  $ kubectl -n kube-system get pod
+
+  $ # create a new namespace, similar to pod creation
+
+* Service and Endpoint
+
+- Pods may vanish anytime their IP address will also vanish;
+
+- Services provide a stable IP and Name to find applications on Kubernetes;
+
+.code labs/service.yaml
+
+* Service and Endpoint
+
+- The selector is very important here, it selects which pods belong to this service based on Pod labels;
+
+- For each pod that matches the selector kubernetes will create an Endpoint object;
+
+- An endpoint is only created for healthy Pod IPs;
+
+- In the control plane, the `kube-proxy` is responsible for ensuring a packet destined to a service IP is correctly forwarded to a pod IP.
+
+* Hands on: kubectl
+
+- Bootstrap minikube and check cluster
+
+  $ minikube start
+  $ kubectl cluster-info
+
+- Manipulating resources with kubectl
+
+  $ kubectl get pod -o wide
+  $ kubectl create -f ./labs/service.yaml
+  $ kubectl get service
+  $ minikube service list
+  $ kubectl get endpoints
+
+: Explain why minikube is used (only to get node IP)
+
+* Networking
+
+Kubernetes uses Container Networking Interface (CNI) plugins for Networking. There are many plugable implementations.
+
+Any implementation must adhere to the following requirements:
+
+- All containers can communicate with all other containers without NAT;
+- All nodes can communicate with all containers (and vice-versa) without NAT;
+- The IP that a container sees itself as is the same IP that others see it as.
+
+* Controller objects
+
+* Controller objects
+
+- Deployment;
+- ReplicaSet;
+- DaemonSet;
+- StatefulSet.
+
+* What do controllers do
+
+- Control loop that listen for changes and do something;
+
+- Dinamically create or manipulate basic objects;
+
+- Built-in controllers are implemented in the `controller-manager` component.
+
+- The scheduler is also a controller:
+-    Watch for created pods;
+-    Assigns a node to the pod.
+
+- The kubelet daemon is also a controller:
+-    Watch for pods with a node assigned;
+-    Start new containers on the container runtime (usually docker).
+
+* Deployment
+
+.code labs/deployment.yaml
+
+* Deployment
+
+Important sections:
+
+  template:
+    ...
+
+The template section represents the same object as the `pod.spec` field. The name is not required as it'll be based on the deployment name.
+
+  selector:
+    matchLabels:
+      app: nginx
+
+The selector *must* be a subset of the pod labels. It'll let the controller know which Pods belong to this deployment.
+
+* Hands on: Create deployment with kubectl
+
+  $ kubectl create -f ./labs/deployment.yaml
+  $ kubectl get pod,deployment,replicaset
+
+- Deployments manage the pod lifecycle;
+- Ensure the number of replica pods exist;
+- If a node is down a new pod will be created to replace the missing one;
+- Manages rolling update of new pod templates.
+
+* ReplicaSet
+
+- Does most of the work for the deployment controller, except rolling updates;
+- It's not usually created manually.
+
+* What does the controller do
+
+Deployment controller
+
+- Watches for deployment object to appear;
+- Creates a new replicaSet object every time the template field is changed;
+- Updates the old replicaSet replicas count to zero.
+
+ReplicaSet controller
+
+- Watches for replica set objects;
+- Create new pods matching the number of replica pods;
+- Watches for pods matching the selector labels;
+- If a pod dies creates a new one to replace it.
+
+: Clarify this is an overly simplified explanation
+
+* Manipulating objects
+
+* Imperative vs Declarative
+
+The `kubectl` client provides two different ways of interacting with cluster objects.
+
+- Imperative
+- Declarative
+
+.image images/imp-vs-dec.png _ 800
+.caption From [[https://kubernetes.io/docs/concepts/overview/object-management-kubectl/overview/][Kubernetes docs]]
+
+* Imperative commands
+
+- kubectl `run`
+- kubectl `create`
+- kubectl `replace`
+- kubectl `delete`
+
+Your yaml file must contain the full description. Every update, including status updates, must be persisted in your yaml file.
+
+This can be a problem when kubernetes itself manipulate the object spec. (e.g. load balancer services with external IPs, horizontal pod autoscaler manipulating replicas)
+
+* Declarative commands
+
+- kubectl `apply`
+
+Running `apply` will compare the provided YAML file to the object currently living in kubernetes and issue a PATCH request with the necessary changes.
+
+Provides tooling to automatically managing directories containing YAML files, creating, patching or deleting as necessary.
+
+However, can make debugging harder as it's not always obvious how the diff and patching will work.
+
+* Pod topics
+
+* Pod topics
+
+- Requests/Limits
+- QoS Class
+- Liveness/Readiness probes
+- Restart policy
+- Sidecar pattern
+
+* Resource requests and limits
+
+Requests and Limits are the kubernetes way of limits resource usage by containers.
+
+  ...
+  resources:
+    requests:
+      memory: "64Mi"
+      cpu: "250m"
+    limits:
+      memory: "128Mi"
+      cpu: "500m"
+  ...
+
+`requests` represent the requested value for the resource, it will be used by the scheduler to choose a node where the requested value is available.
+
+`limits` represent the absolute limit for using the specified resource. In the case of memory, going over this threshold will cause the kernel OOM to kill a process in the pod.
+
+* QoS Class
+
+The concept of QoS classes is directly related to resource requests and limits.
+
+The QoS class is selected automatically by Kubernetes and helps deciding what to do when a node is running out of resources.
+
+- Guaranteed
+The `requests` value must be set and must equal the `limits` value on all containers for both cpu and memory.
+
+- Burstable
+At least one container in the pod has either memory or cpu `requests` value set.
+
+- BestEffort
+No `requests` and no `limits` on any container.
+
+* Hands on: QoS class
+
+  $ kubectl apply -f labs/pod-resource.yaml
+  $ kubectl get pod mylimitedpod -o yaml
+
+Modify the pod to match Guaranteed criteria.
+Stress the node to see eviction happening.
+
+* Liveness/Readiness probes
+
+Liveness and readiness probes are ways for kubernetes to verify if a container is running correctly and take some action based on this knowledge.
+
+Both probes run continuously during the lifecycle of a pod.
+
+  readinessProbe:
+    httpGet:
+      path: /healthz
+      port: 8080
+    initialDelaySeconds: 5
+    periodSeconds: 10
+  livenessProbe:
+    httpGet:
+      path: /healthz
+      port: 8080
+    initialDelaySeconds: 15
+    periodSeconds: 20
+
+* Liveness vs Readiness
+
+- Readiness
+
+A failing readiness probe causes kubernetes to remove the endpoint for the Pod IP from matching service. The pod is marked as unready and no other action is taken.
+
+- Liveness
+
+A failing liveness probe will make kubernetes kill the Pod. Depending on the restart policy configuration it will be restarted or not.
+
+* Probe types
+
+There are three types of probes:
+
+- httpGet
+- tcpSocket
+- exec
+
+* Hands on: Probes
+
+  $ kubectl apply -f labs/pod-probe.yaml
+  $ kubectl get pod --watch
+
+  $ kubectl explain pod.spec.containers.livenessProbe.exec
+  $ kubectl explain pod.spec.containers.livenessProbe.tcpSocket
+  $ kubectl explain pod.spec.containers.livenessProbe.httpGet
+
+* Sidecar pattern
+
+So far all of our examples have used a single container on each pod.
+
+This is the most common scenario, however using multiple containers on the same pod can help separating responsibilities when multiple actions must be taken.
+
+There are many examples where this would be useful, like processing logs, or setting up a database.
+
+- Every container on the same pod run on the same node.
+- They also share the same pod IP.
+
+* Sidecar pattern (and volumes preview)
+
+.code labs/pod-sidecar.yaml
+
+* Hands on: Sidecar
+
+  $ kubectl apply -f labs/pod-sidecar.yaml
+  $ kubectl apply -f labs/service-sidecar.yaml
+  $ minikube service list
+
+* Service topics
+
+* Service topics
+
+- Service discovery
+- Service types
+- Service ports
+- Headless services
+
+* Service discovery
+
+A kubernetes cluster includes its own dns server. It can either be known as `kube-dns` (based on dnsmasq) or `CoreDNS` (new DNS server implementation in Go).
+
+The default resolver for any created pod points to the internal DNS server and it is responsible for also forwarding DNS queries to outside the cluster.
+
+An internal DNS entry is created for each service usually as:
+  
+  <service name>.<namespace>.svc.cluster.local A <Service Cluster IP>
+
+* Hands on: DNS entries
+
+Based on previous hands on exercises our cluster should have 2 running services, `nginx-sidecar` and `myservice`.
+
+  $ kubectl get services
+  $ kubectl run --rm -it ubuntu --image=ubuntu --restart=Never
+  $ ... inside pod ...
+  $ apt-get update
+  $ apt-get install curl
+  $ curl nginx-sidecar
+  $ curl nginx-sidecar.default.svc.cluster.local
+  $ curl <service ip>
+  $ cat /etc/resolv.conf
+
+* Service types
+
+- ClusterIP
+Is the default type of service, a cluster-wide IP address is allocated to the Service. DNS entries are created pointing to this IP address. It's only accessible from inside the cluster.
+
+- NodePort
+Extends the ClusterIP type by also allocating a port on the *node* IP for each service port. Traffic to the node IP on this port is then forwarded to the cluster IP on the service port.
+This makes a service available from outside the cluster. We've been using this type of service with minikube when using its IP.
+
+* Service types
+
+- LoadBalancer
+Extends the NodePort type by also creating a load balancer IP on the *cloud* *provider* being used.
+Cloud providers are the bridge between Kubernetes and a cloud like AWS, Google Cloud or Cloudstack.
+Kubernetes itself does nothing for LoadBalancer services and a external controller known as *cloud* *controller* *manager* must be installed in the cluster for LoadBalancer services to work.
+On AWS a ELB IP may be created for a LoadBalancer service.
+On Cloudstack a ACS LoadBalancerRule is created.
+
+- ExternalName
+External name services are a bit different from the rest as they simply create a CNAME record in the internal DNS server pointing to the `service.spec.externalName` field.
+
+: https://github.com/tsuru/csccm
+
+* Headless services
+
+Headless services are a special kind of ClusterIP service where the ClusterIP value is explicitly set to `None`.
+
+Because a cluster-wide IP address is not created the A DNS entry for the service returns the IP address of each individual pod IP.
+
+* Hands on: Headless service
+
+  $ kubectl apply -f ./labs/headless.yaml
+  $ kubectl run --rm -it ubuntu --image=ubuntu --restart=Never
+  $ apt-get update
+  $ apt-get install curl dnsutils
+  $ nslookup headless-svc
+  $ curl headless-svc
+
+* Deployments topics
+
+* Deployments topics
+
+- Rolling updates
+- Replicas
+
+* Rolling updates
+
+Deployments ensure that a number of replica pods are always available.
+We can even try to manually destroy them and they will eventually be back.
+
+Rolling update allow us to configure how deployments are updated ensuring it never becomes unavailable
+
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 50%
+      maxUnavailable: 1
+
+* Hands on: Rolling updates
+
+  $ kubectl apply -f ./labs/deployment-rolling.yaml
+  $ kubectl rollout status deployment/rolling-deployment
+  $ ... change image version to 1.9.1 ...
+  $ kubectl apply -f ./labs/deployment-rolling.yaml
+  $ kubectl rollout status deployment/rolling-deployment
+
+* Let's talk about nodes
+
+* Nodes
+
+Nodes are also registered as kubernetes objects.
+The kubelet process on each node is responsible for updating the node status and checking its resource usage.
+
+* Hands on: Nodes
+
+  $ kubectl get nodes
+  $ kubectl describe nodes
+
+Nodes as any other object can have metadata as labels and annotations, and some are added automatically.
+
+: Talk about describe
+
+* Taints and Tolerations
+
+Nodes can have `taints`, taints are a way for telling the scheduler that this node should not be used by a pod unless the pod `tollerates` the specified taint.
+
+Using this mechanism we can for example make master nodes unschedulable.
+
+It's also useful for debugging a node, no pods will use it except pods made to tollerate it while debugging.
+
+* Taints and Tolerations
+
+In nodes:
+
+  taints:
+    - effect: NoSchedule
+      key: mytaint
+      value: myvalue
+
+In pods:
+
+  tolerations:
+    - key: mytaint
+      operator: Exists
+
+Effects can be:
+
+- NoSchedule
+- PreferNoSchedule
+- NoExecute (force eviction)
+
+* Hands on: Taints/Tolerations
+
+  $ kubectl taint node minikube mytaint=myvalue:NoSchedule
+  $ kubectl apply -f ./labs/pod-toleration.yaml 
+  $ ... error ...
+  $ ... modify the pod to add a toleration ...
+  $ kubectl apply -f ./labs/pod-toleration.yaml 
+
+* DaemonSets
+
+* DaemonSets
+
+Daemon sets are a different kind of controller managed object.
+
+They are useful when we want to ensure the same pod exists on every Node.
+
+Usage examples are log processing, node metrics collection, node networking configuration.
+
+* DaemonSets
+
+  apiVersion: apps/v1
+  kind: DaemonSet
+
+Object specification similar to Deployments
+
+* Hands-on: DaemonSet
+
+  $ kubectl apply -f ./labs/daemonset.yaml
+  $ kubectl get daemonset
+  $ kubectl get pods
