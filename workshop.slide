@@ -634,8 +634,7 @@ Based on previous hands on exercises our cluster should have 2 running services,
   $ kubectl get services
   $ kubectl run --rm -it ubuntu --image=ubuntu --restart=Never
   $ ... inside pod ...
-  $ apt-get update
-  $ apt-get install curl
+  $ apt-get update && apt-get install curl -y
   $ curl nginx-sidecar
   $ curl nginx-sidecar.default.svc.cluster.local
   $ curl <service ip>
@@ -674,8 +673,7 @@ Because a cluster-wide IP address is not created the A DNS entry for the service
 
   $ kubectl apply -f ./labs/headless.yaml
   $ kubectl run --rm -it ubuntu --image=ubuntu --restart=Never
-  $ apt-get update
-  $ apt-get install curl dnsutils
+  $ apt-get update && apt-get install curl dnsutils -y
   $ nslookup headless-svc
   $ curl headless-svc
 
