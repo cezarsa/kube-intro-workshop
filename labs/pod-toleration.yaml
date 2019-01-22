@@ -3,6 +3,9 @@ kind: Pod
 metadata:
   name: mytolleratepod
 spec:
+  tolerations:
+  - key: mytaint
+    operator: Exists
   containers:
   - name: mypod1
     image: nginx

@@ -351,6 +351,27 @@ ReplicaSet controller
 
 : Clarify this is an overly simplified explanation
 
+* Rolling updates
+
+Deployments ensure that a number of replica pods are always available.
+We can even try to manually destroy them and they will eventually be back.
+
+Rolling update allow us to configure how deployments are updated ensuring it never becomes unavailable
+
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 50%
+      maxUnavailable: 1
+
+* Hands on: Rolling updates
+
+  $ kubectl apply -f ./labs/deployment-rolling.yaml
+  $ kubectl rollout status deployment/rolling-deployment
+  $ ... change image version to 1.9.1 ...
+  $ kubectl apply -f ./labs/deployment-rolling.yaml
+  $ kubectl rollout status deployment/rolling-deployment
+
 * Manipulating objects
 
 * Imperative vs Declarative
@@ -658,34 +679,6 @@ Because a cluster-wide IP address is not created the A DNS entry for the service
   $ nslookup headless-svc
   $ curl headless-svc
 
-* Deployments topics
-
-* Deployments topics
-
-- Rolling updates
-- Replicas
-
-* Rolling updates
-
-Deployments ensure that a number of replica pods are always available.
-We can even try to manually destroy them and they will eventually be back.
-
-Rolling update allow us to configure how deployments are updated ensuring it never becomes unavailable
-
-  strategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxSurge: 50%
-      maxUnavailable: 1
-
-* Hands on: Rolling updates
-
-  $ kubectl apply -f ./labs/deployment-rolling.yaml
-  $ kubectl rollout status deployment/rolling-deployment
-  $ ... change image version to 1.9.1 ...
-  $ kubectl apply -f ./labs/deployment-rolling.yaml
-  $ kubectl rollout status deployment/rolling-deployment
-
 * DaemonSets
 
 * DaemonSets
@@ -732,3 +725,18 @@ External volumes can be:
     volumeMounts:
       name: shared-data
       mountPath: /mnt/dir
+
+* Much, much more
+
+- StatefulSet
+- ConfigMap
+- Secret
+- Job
+- CronJob
+- RBAC
+- PersistentVolume
+- PersistentVolumeClaim
+- StorageClass
+- NetworkPolicy
+- ResourceQuota
+- ...
