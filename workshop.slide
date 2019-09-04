@@ -79,6 +79,7 @@ Basic objects:
 - Services
 - Endpoints
 - Volumes
+- ConfigMap
 - Nodes
 
 The *control* *plane* is responsible for storing these objects and doing something with them.
@@ -191,6 +192,18 @@ Containers in the same pod:
   6 - kubelet    -> api-server: 
     Oh thanks, I can see this pod was supposed to be running on my node.
     I've just started it and updated the Pod status.
+
+* ConfigMap
+
+Config maps are objects used to store configuration and make this configuration available for pods to use.
+
+.code labs/configmap.yaml
+
+* ConfigMap
+
+Using config maps inside a pod by mounting the config map inside the filesystem.
+
+.code labs/podconfigmap.yaml
 
 * Namespaces
 
