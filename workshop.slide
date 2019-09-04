@@ -1,7 +1,13 @@
 Kubernetes Intro
 Workshop
 
-Cezar Sá - tsuru
+Cezar Sá
+@cezarsa
+Globo.com / tsuru
+
+Guilherme Rezende
+@gbrezende
+Globo.com / tsuru
 
 * Requirements
 .html images/style.html
@@ -100,7 +106,7 @@ Usually YAML files are used to represent a Kubernetes object, example:
 
   status:
 
-These 4 blocks are common for all Kubernetes objects.
+These 4 blocks are common for almost all Kubernetes objects.
 
 * Control Plane: Master and Nodes
 
@@ -110,22 +116,6 @@ The Control Plane is responsible for making the *desired* state a reality.
 
 .image images/kubernetes-control-plane.png _ 700
 .caption By [[https://docs.google.com/presentation/d/1Gp-2blk5WExI_QR59EUZdwfO2BWLJqa626mK2ej-huo/edit#slide=id.g1e639c415b_0_56][Lucas Käldström]]
-
-* Control Plane:
-
-Every node (including masters) must run 2 processes:
-- kubelet
-- kube-proxy
-
-Every master node also runs:
-- kube-apiserver
-- kube-controller-manager
-- kube-scheduler
-- kube-dns
-
-: A YAML file with a resource description always describe a desired state,
-: this desired state may never come true depending on the available resources for the
-: cluster.
 
 * Pods
 
@@ -201,16 +191,6 @@ Containers in the same pod:
   6 - kubelet    -> api-server: 
     Oh thanks, I can see this pod was supposed to be running on my node.
     I've just started it and updated the Pod status.
-
-* Pods
-
-- Pods will die, on their own they do not provide resilience;
-
-- A pod scheduled to a node will always run on the same node. There's no such thing as a _rescheduled_ pod;
-
-- A higher level abstraction is needed to provide resilience;
-
-- Only a very limited set of attributes can be modified on exiting pods.
 
 * Namespaces
 
@@ -300,6 +280,16 @@ Any implementation must adhere to the following requirements:
 -    Watch for pods with a node assigned;
 -    Start new containers on the container runtime (usually docker).
 
+* Pods - Limitations
+
+- Pods will die, on their own they do not provide resilience;
+
+- A pod scheduled to a node will always run on the same node. There's no such thing as a _rescheduled_ pod;
+
+- A higher level abstraction is needed to provide resilience;
+
+- Only a very limited set of attributes can be modified on exiting pods.
+
 * Deployment
 
 .code labs/deployment.yaml
@@ -311,7 +301,7 @@ Important sections:
   template:
     ...
 
-The template section represents the same object as the `pod.spec` field. The name is not required as it'll be based on the deployment name.
+The template section represents the same objects as the `pod.metadata` and `pod.spec` fields. The name is not required as it'll be based on the deployment name.
 
   selector:
     matchLabels:
