@@ -651,21 +651,11 @@ On Cloudstack a ACS LoadBalancerRule is created.
 - ExternalName
 External name services are a bit different from the rest as they simply create a CNAME record in the internal DNS server pointing to the `service.spec.externalName` field.
 
-: https://github.com/tsuru/csccm
-
 * Headless services
 
 Headless services are a special kind of ClusterIP service where the ClusterIP value is explicitly set to `None`.
 
 Because a cluster-wide IP address is not created the A DNS entry for the service returns the IP address of each individual pod IP.
-
-* Hands on: Headless service
-
-  $ kubectl apply -f ./labs/headless.yaml
-  $ kubectl run --rm -it ubuntu --image=ubuntu --restart=Never
-  $ apt-get update && apt-get install curl dnsutils -y
-  $ nslookup headless-svc
-  $ curl headless-svc
 
 * DaemonSets
 
